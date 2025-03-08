@@ -1,0 +1,20 @@
+Package: initRproject
+Type: Package
+Title: Automatically loaded functions when an R project is launched
+Version: 0.1.0
+Authors@R: c(
+    person("Chenyu", "Li", email = "chenyu.li.hz@gmail.com", role = c("aut", "cre"))
+  )
+Description: This packages includes a series of functions that could be loaded When an R project is launched. 
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.2
+Imports: 
+    stringr (>= 1.5.1)
+Remotes: 
+    tidyverse/stringr
+Suggests: 
+    testthat (>= 3.0.0),
+    remotes
+Config/testthat/edition: 3
