@@ -134,181 +134,325 @@ create_template <- function(file_path = NULL,
 }
 
 
+#' Generate Template Creation Function Code
+#'
+#' @description
+#' Analyzes an existing Quarto (.qmd), R Markdown (.rmd), or R script (.R) file
+#' and generates the R code for a template creation function that can be added
+#' to the package. This allows users to easily create their own custom templates.
+#' The generated template function will only support the same file type(s) as the source file.
+#'
+#' @param file_path Character string. The path to an existing file that will serve
+#'   as the template source.
+#' @param template_name Character string. The name to use for the new template function.
+#'   This will be used to create a function named `create_\{template_name\}_content`.
+#'   Should be a valid R function name component (lowercase, no spaces).
+#' @param description Character string. A brief description of the template that will
+#'   be included in the function documentation. Defaults to "Custom template".
+#'
+#' @return Character string containing the R code for the new template creation function.
+#'   This code can be copied into a package file or saved to a new file.
+#'
+#' @examples
+#' \dontrun{
+#' # Generate a template function from an existing Quarto file
+#' code <- generate_template_function("my_analysis.qmd", "publication_ready")
+#'
+#' # View the generated code
+#' cat(code)
+#'
+#' # Save the generated code to a file
+#' writeLines(code, "create_publication_ready_content.R")
+#' }
+#'
+#' @importFrom stringr str_glue str_replace str_to_lower str_detect
+#' @export
+generate_template_function <- function(file_path,
+                                       template_name,
+                                       description = "Custom template") {
 
-#' Create Data Analysis Document Content
-#'
-#' Creates content for a data analysis template with sections for setup,
-#' data preparation, visualization, and statistical analysis.
-#'
-#' @param title Character string. The document title.
-#' @param author Character string or NULL. The document author.
-#' @param type Character string. The document type ("qmd" or "rmd").
-#'   Note: "r" type is not currently supported for this template.
-#'
-#' @return Character vector containing the document content.
-#'
-#' @importFrom stringr str_glue
-#' @keywords internal
-create_data_analysis_content <- function(title, author, type) {
-  # Check if type is "r" and stop with informative message
-  if (tolower(type) == "r") {
-    stop("R script templates are not currently supported for the data_analysis template. This feature is reserved for future implementation.")
+  # Input validation
+  if (!is.character(file_path) || length(file_path) != 1) {
+    stop("file_path must be a single character string")
   }
 
-  # Start with YAML header
-  yaml_header <- c("---", stringr::str_glue('title: "{title}"'))
-
-  # Add author if provided
-  if (!is.null(author)) {
-    yaml_header <- c(yaml_header, stringr::str_glue('author: "{author}"'))
+  if (!file.exists(file_path)) {
+    stop(stringr::str_glue("File does not exist: {file_path}"))
   }
 
-  # Complete the YAML header with format settings
-  yaml_header <- c(
-    yaml_header,
-    "format: html",
-    "editor: source",
-    "editor_options: ",
-    "  chunk_output_type: console",
-    "---",
-    ""
-  )
+  if (!is.character(template_name) || length(template_name) != 1) {
+    stop("template_name must be a single character string")
+  }
 
-  # Document body with predefined content
-  document_body <- c(
-    "# 1 Initial setting",
-    "",
-    "## 1.1 clear workspace and set default color",
-    "",
-    "```{r reset, include=FALSE}",
-    "graphics.off()",
-    "rm(list=ls(all.names=TRUE)) # Remove ",
-    "options(digits = 3)",
-    "options(ggplot2.discrete.colour= c(\"#615F63\",\"#FF7F6F\",\"#2F7FC1\",\"#FFBE7A\",\"#8FC0A9\",\"#8A1C56\"))",
-    "options(ggplot2.discrete.fill= c(\"#615F63\",\"#FF7F6F\",\"#2F7FC1\",\"#FFBE7A\",\"#8FC0A9\",\"#8A1C56\"))",
-    "```",
-    "",
-    "## 1.2 Import functions and packages",
-    "",
-    "```{r}",
-    "",
-    "# Source all local R functions silently",
-    "invisible(",
-    "  sapply(",
-    "    list.files(\"./functions\", pattern = \"\\\\.R$\", full.names = TRUE),",
-    "    function(file) suppressMessages(suppressWarnings(source(file, echo = FALSE)))",
-    "  )",
-    ")",
-    "",
-    "# Install and load packages",
-    "packages = c(",
-    "  # CRAN packages",
-    "  \"tidyverse\", \"brms\", \"tidybayes\", \"emmeans\", \"bayestestR\", \"ggpubr\",",
-    "  # Github packages",
-    "  \"chenyu-psy/smartr@v0.2.2\", ",
-    "  \"venpopov/bmm\"",
-    "  )",
-    "process_packages(packages, quietly = TRUE)",
-    "",
-    "",
-    "# theme",
-    "theme_set(theme_bw()) # using `theme_bw` as the default",
-    "dodge2 = position_dodge(.2)",
-    "",
-    "",
-    "# task name and path",
-    "task <- \"task_name\"",
-    "model_path <- stringr::str_glue(\"./models/models_{task}/\")",
-    "sample_path <- stringr::str_glue(\"./samples/sample_{task}/\")",
-    "figure_path <- stringr::str_glue(\"./figures/figures_{task}/\")",
-    "bf_path <- stringr::str_glue(\"./models/BayesFactor_{task}/\")",
-    "# check whether the folders are existent or not. If not, create a new one",
-    "dir.create(file.path(model_path), showWarnings = FALSE)",
-    "dir.create(file.path(sample_path), showWarnings = FALSE)",
-    "dir.create(file.path(figure_path), showWarnings = FALSE)",
-    "dir.create(file.path(bf_path), showWarnings = FALSE)",
-    "",
-    "```",
-    "",
-    "# 2 Data Preparation",
-    "",
-    "## 2.1 Import data",
-    "",
-    "``` {r}",
-    "",
-    "```",
-    "",
-    "# 3 Data Visualization",
-    "",
-    "",
-    "",
-    "# 4 Statistical Analysis",
-    "",
-    "",
-    "",
-    ""
-  )
+  # Check if template_name is a valid R function name component
+  if (!grepl("^[a-z][a-z0-9_]*$", template_name)) {
+    stop("template_name must start with a lowercase letter and contain only lowercase letters, numbers, and underscores")
+  }
 
-  # Combine header and body
-  c(yaml_header, document_body)
+  # Determine file type
+  file_ext <- tolower(tools::file_ext(file_path))
+  if (!file_ext %in% c("qmd", "rmd", "r")) {
+    stop("File must be a Quarto (.qmd), R Markdown (.rmd), or R script (.R) file")
+  }
+
+  # Read the file content
+  file_content <- readLines(file_path, warn = FALSE)
+
+  # Call the appropriate helper function based on file type
+  if (file_ext %in% c("qmd", "rmd")) {
+    generate_markdown_template_function(file_content, template_name, description, file_ext)
+  } else if (file_ext == "r") {
+    generate_r_template_function(file_content, template_name, description)
+  }
 }
 
-#' Create Simple Report Document Content
+#' Generate Template Function for Quarto or R Markdown Files
 #'
-#' Creates content for a simple report template with basic structure.
-#' This is an example of an additional template type.
+#' Helper function to generate template creation code for Quarto or R Markdown files.
 #'
-#' @param title Character string. The document title.
-#' @param author Character string or NULL. The document author.
-#' @param type Character string. The document type ("qmd" or "rmd").
-#'   Note: "r" type is not currently supported for this template.
+#' @param file_content Character vector containing the content of the source file.
+#' @param template_name Character string. The name for the new template function.
+#' @param description Character string. A brief description of the template.
+#' @param file_ext Character string. The file extension of the source file ("qmd" or "rmd").
 #'
-#' @return Character vector containing the document content.
+#' @return Character string containing the R code for the new template creation function.
 #'
-#' @importFrom stringr str_glue
 #' @keywords internal
-create_simple_report_content <- function(title, author, type) {
-  # Check if type is "r" and stop with informative message
-  if (tolower(type) == "r") {
-    stop("R script templates are not currently supported for the simple_report template. This feature is reserved for future implementation.")
-  }
+generate_markdown_template_function <- function(file_content, template_name, description, file_ext) {
+  # Generate the function code
+  function_name <- stringr::str_glue("create_{template_name}_content")
 
-  # Start with YAML header
-  yaml_header <- c("---", stringr::str_glue('title: "{title}"'))
-
-  # Add author if provided
-  if (!is.null(author)) {
-    yaml_header <- c(yaml_header, stringr::str_glue('author: "{author}"'))
-  }
-
-  # Complete the YAML header with format settings
-  yaml_header <- c(
-    yaml_header,
-    "format: html",
-    "---",
+  # Create the function code with documentation
+  function_code <- c(
+    stringr::str_glue("#' Create {stringr::str_to_title(stringr::str_replace_all(template_name, '_', ' '))} Content"),
+    "#'",
+    stringr::str_glue("#' @description"),
+    stringr::str_glue("#' {description}"),
+    "#'",
+    "#' @param title Character string. The document title.",
+    "#' @param author Character string or NULL. The document author.",
+    "#' @param type Character string. The document type.",
+    "#'   Must be either \"qmd\" or \"rmd\".",
+    "#'",
+    "#' @return Character vector containing the document content.",
+    "#'",
+    "#' @importFrom stringr str_glue",
+    "#' @keywords internal",
+    stringr::str_glue("{function_name} <- function(title, author, type) {{"),
+    "",
+    "  # Validate file type",
+    "  type <- tolower(type)",
+    "  if (!type %in% c(\"qmd\", \"rmd\")) {",
+    stringr::str_glue("    stop(\"The {template_name} template only supports Quarto (.qmd) and R Markdown (.rmd) files.\")"),
+    "  }",
+    "",
+    "  # Start with YAML header",
+    "  yaml_header <- c(\"---\", stringr::str_glue('title: \"{title}\"'))",
+    "",
+    "  # Add author if provided",
+    "  if (!is.null(author)) {",
+    "    yaml_header <- c(yaml_header, stringr::str_glue('author: \"{author}\"'))",
+    "  }",
     ""
   )
 
-  # Document body with simple structure
-  document_body <- c(
-    "# Introduction",
+  # Extract YAML header from the original file
+  yaml_start <- which(file_content == "---")[1]
+  yaml_end <- which(file_content == "---")[2]
+
+  if (!is.na(yaml_start) && !is.na(yaml_end) && yaml_end > yaml_start) {
+    yaml_content <- file_content[(yaml_start + 1):(yaml_end - 1)]
+
+    # Find and remove title and author lines
+    title_line_index <- grep("^title:", yaml_content)
+    author_line_index <- grep("^author:", yaml_content)
+
+    if (length(title_line_index) > 0) {
+      yaml_content <- yaml_content[-title_line_index]
+    }
+
+    if (length(author_line_index) > 0) {
+      yaml_content <- yaml_content[-author_line_index]
+    }
+
+    # Add remaining YAML content
+    if (length(yaml_content) > 0) {
+      yaml_lines <- paste0("    \"", gsub("\"", "\\\\\"", yaml_content), "\"")
+
+      function_code <- c(
+        function_code,
+        "  # Complete the YAML header with additional settings",
+        "  yaml_header <- c(",
+        "    yaml_header,",
+        yaml_lines,
+        "  )",
+        ""
+      )
+    } else {
+      function_code <- c(
+        function_code,
+        "  # Complete the YAML header",
+        "  yaml_header <- c(",
+        "    yaml_header,",
+        "    \"format: html\"",
+        "  )",
+        ""
+      )
+    }
+  } else {
+    # If no YAML header found, add a basic one
+    function_code <- c(
+      function_code,
+      "  # Complete the YAML header",
+      "  yaml_header <- c(",
+      "    yaml_header,",
+      "    \"format: html\"",
+      "  )",
+      ""
+    )
+  }
+
+  # Add the document body
+  body_start <- if (!is.na(yaml_end)) yaml_end + 1 else 1
+  if (body_start <= length(file_content)) {
+    body_lines <- paste0("    \"", gsub("\"", "\\\\\"", file_content[body_start:length(file_content)]), "\"")
+
+    function_code <- c(
+      function_code,
+      "  # Document body",
+      "  document_body <- c(",
+      body_lines,
+      "  )",
+      "",
+      "  # Combine header and body",
+      "  c(yaml_header, document_body)"
+    )
+  } else {
+    function_code <- c(
+      function_code,
+      "  # Empty document body",
+      "  document_body <- c(\"\")",
+      "",
+      "  # Combine header and body",
+      "  c(yaml_header, document_body)"
+    )
+  }
+
+  # Close the function
+  function_code <- c(function_code, "}")
+
+  # Return the complete function code as a single string
+  paste(function_code, collapse = "\n")
+}
+
+#' Generate Template Function for R Script Files
+#'
+#' Helper function to generate template creation code for R script files.
+#'
+#' @param file_content Character vector containing the content of the source file.
+#' @param template_name Character string. The name for the new template function.
+#' @param description Character string. A brief description of the template.
+#'
+#' @return Character string containing the R code for the new template creation function.
+#'
+#' @keywords internal
+generate_r_template_function <- function(file_content, template_name, description) {
+  # Generate the function code
+  function_name <- stringr::str_glue("create_{template_name}_content")
+
+  # Create the function code with documentation
+  function_code <- c(
+    stringr::str_glue("#' Create {stringr::str_to_title(stringr::str_replace_all(template_name, '_', ' '))} Content"),
+    "#'",
+    stringr::str_glue("#' @description"),
+    stringr::str_glue("#' {description}"),
+    "#'",
+    "#' @param title Character string. The document title.",
+    "#' @param author Character string or NULL. The document author.",
+    "#' @param type Character string. The document type.",
+    "#'   Must be \"r\".",
+    "#'",
+    "#' @return Character vector containing the document content.",
+    "#'",
+    "#' @importFrom stringr str_glue",
+    "#' @keywords internal",
+    stringr::str_glue("{function_name} <- function(title, author, type) {{"),
     "",
-    "This is a simple report template.",
+    "  # Validate file type",
+    "  type <- tolower(type)",
+    "  if (type != \"r\") {",
+    stringr::str_glue("    stop(\"The {template_name} template only supports R script (.r) files.\")"),
+    "  }",
     "",
-    "# Methods",
+    "  # Create R script header with comments",
+    "  header <- c(",
+    "    \"# ==============================================================================\",",
+    "    stringr::str_glue(\"# {title}\"),",
+    "    \"# ==============================================================================\",",
+    "    \"\"",
+    "  )",
     "",
-    "```{r setup}",
-    "library(tidyverse)",
-    "```",
+    "  # Add author if provided",
+    "  if (!is.null(author)) {",
+    "    header <- c(",
+    "      header[1:2],",
+    "      stringr::str_glue(\"# Author: {author}\"),",
+    "      header[3:length(header)]",
+    "    )",
+    "  }",
     "",
-    "# Results",
-    "",
-    "# Discussion",
-    "",
-    "# References",
+    "  # Add creation date",
+    "  header <- c(",
+    "    header,",
+    "    stringr::str_glue(\"# Created: {format(Sys.Date(), '%Y-%m-%d')}\"),",
+    "    \"# ==============================================================================\",",
+    "    \"\"",
+    "  )",
     ""
   )
 
-  # Combine header and body
-  c(yaml_header, document_body)
+  # Add the document body, skipping any header comments that were replaced
+  skip_lines <- 0
+  for (i in 1:min(20, length(file_content))) {
+    if (grepl("^#.*=+", file_content[i]) ||
+        grepl("^#.*[Tt]itle", file_content[i]) ||
+        grepl("^#.*[Aa]uthor", file_content[i]) ||
+        grepl("^#.*[Cc]reated", file_content[i]) ||
+        grepl("^#.*[Dd]ate", file_content[i])) {
+      skip_lines <- i
+    } else if (!grepl("^#", file_content[i]) && !grepl("^\\s*$", file_content[i])) {
+      break
+    }
+  }
+
+  body_start <- skip_lines + 1
+  if (body_start <= length(file_content)) {
+    body_lines <- paste0("    \"", gsub("\"", "\\\\\"", file_content[body_start:length(file_content)]), "\"")
+
+    function_code <- c(
+      function_code,
+      "  # Document body",
+      "  document_body <- c(",
+      body_lines,
+      "  )",
+      "",
+      "  # Combine header and body",
+      "  c(header, document_body)"
+    )
+  } else {
+    function_code <- c(
+      function_code,
+      "  # Empty document body",
+      "  document_body <- c(\"\")",
+      "",
+      "  # Combine header and body",
+      "  c(header, document_body)"
+    )
+  }
+
+  # Close the function
+  function_code <- c(function_code, "}")
+
+  # Return the complete function code as a single string
+  paste(function_code, collapse = "\n")
 }

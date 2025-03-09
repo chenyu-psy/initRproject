@@ -141,7 +141,7 @@ test_that("create_template handles errors correctly", {
       file_path = file.path(test_dir, "invalid_type.qmd"),
       type = "invalid"
     ),
-    regexp = 'type must be either "qmd" or "rmd"'
+    regexp = 'type must be one of "qmd", "rmd", or "r"'
   )
 
   # Clean up

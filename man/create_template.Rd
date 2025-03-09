@@ -2,7 +2,7 @@
 % Please edit documentation in R/create_template.R
 \name{create_template}
 \alias{create_template}
-\title{Create a Quarto or R Markdown Template File}
+\title{Create a Quarto, R Markdown, or R Script Template File}
 \usage{
 create_template(
   file_path = NULL,
@@ -24,7 +24,8 @@ Defaults to "Data Analysis".}
 \item{author}{Character string. The author name to include in the YAML header.
 If provided, will be added to the YAML header. If NULL (default), no author field is added.}
 
-\item{type}{Character string. The type of file to create, either "qmd" or "rmd".
+\item{type}{Character string. The type of file to create, either "qmd", "rmd", or "r".
+Note that "r" type support depends on the specific template being used.
 Defaults to "qmd".}
 
 \item{template}{Character string. The template style to use. Available templates are
@@ -35,7 +36,7 @@ Default is "data_analysis".}
 Invisibly returns the path to the created file.
 }
 \description{
-Creates a new Quarto (.qmd) or R Markdown (.rmd) file at the specified path
+Creates a new Quarto (.qmd), R Markdown (.rmd), or R script (.R) file at the specified path
 with customizable title and author information. Different template types are
 available to suit various document purposes.
 }
