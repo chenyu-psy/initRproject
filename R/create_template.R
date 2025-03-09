@@ -142,12 +142,18 @@ create_template <- function(file_path = NULL,
 #' @param title Character string. The document title.
 #' @param author Character string or NULL. The document author.
 #' @param type Character string. The document type ("qmd" or "rmd").
+#'   Note: "r" type is not currently supported for this template.
 #'
 #' @return Character vector containing the document content.
 #'
 #' @importFrom stringr str_glue
 #' @keywords internal
 create_data_analysis_content <- function(title, author, type) {
+  # Check if type is "r" and stop with informative message
+  if (tolower(type) == "r") {
+    stop("R script templates are not currently supported for the data_analysis template. This feature is reserved for future implementation.")
+  }
+
   # Start with YAML header
   yaml_header <- c("---", stringr::str_glue('title: "{title}"'))
 
@@ -254,12 +260,18 @@ create_data_analysis_content <- function(title, author, type) {
 #' @param title Character string. The document title.
 #' @param author Character string or NULL. The document author.
 #' @param type Character string. The document type ("qmd" or "rmd").
+#'   Note: "r" type is not currently supported for this template.
 #'
 #' @return Character vector containing the document content.
 #'
 #' @importFrom stringr str_glue
 #' @keywords internal
 create_simple_report_content <- function(title, author, type) {
+  # Check if type is "r" and stop with informative message
+  if (tolower(type) == "r") {
+    stop("R script templates are not currently supported for the simple_report template. This feature is reserved for future implementation.")
+  }
+
   # Start with YAML header
   yaml_header <- c("---", stringr::str_glue('title: "{title}"'))
 
