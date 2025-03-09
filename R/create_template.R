@@ -134,6 +134,7 @@ create_template <- function(file_path = NULL,
 }
 
 
+
 #' Create Data Analysis Document Content
 #'
 #' Creates content for a data analysis template with sections for setup,
