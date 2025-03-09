@@ -1,7 +1,7 @@
-#' Create a Quarto or R Markdown Template File
+#' Create a Quarto, R Markdown, or R Script Template File
 #'
 #' @description
-#' Creates a new Quarto (.qmd) or R Markdown (.rmd) file at the specified path
+#' Creates a new Quarto (.qmd), R Markdown (.rmd), or R script (.R) file at the specified path
 #' with customizable title and author information. Different template types are
 #' available to suit various document purposes.
 #'
@@ -13,7 +13,8 @@
 #'   Defaults to "Data Analysis".
 #' @param author Character string. The author name to include in the YAML header.
 #'   If provided, will be added to the YAML header. If NULL (default), no author field is added.
-#' @param type Character string. The type of file to create, either "qmd" or "rmd".
+#' @param type Character string. The type of file to create, either "qmd", "rmd", or "r".
+#'   Note that "r" type support depends on the specific template being used.
 #'   Defaults to "qmd".
 #' @param template Character string. The template style to use. Available templates are
 #'   automatically detected based on the available create_*_content functions.
@@ -65,13 +66,12 @@ create_template <- function(file_path = NULL,
 
   # Validate and standardize the file type
   type <- stringr::str_to_lower(type)
-  if (!type %in% c("qmd", "rmd")) {
-    stop('type must be either "qmd" or "rmd"')
+  if (!type %in% c("qmd", "rmd", "r")) {
+    stop('type must be one of "qmd", "rmd", or "r"')
   }
 
   # Dynamically check for available template functions
   # Look for functions named create_*_content in the package environment
-  # Instead of parent.frame(), use the package namespace
   package_env <- environment()  # Or use getNamespace("yourpackagename")
   # Or directly use the functions from your package
   available_functions <- ls(pattern = "^create_.*_content$", envir = asNamespace("initRproject"))
@@ -132,6 +132,7 @@ create_template <- function(file_path = NULL,
   # Return the file path invisibly
   invisible(file_path)
 }
+
 
 #' Create Data Analysis Document Content
 #'
