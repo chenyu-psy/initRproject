@@ -70,7 +70,7 @@ create_data_analysis_content <- function(title, author, type) {
     "  # CRAN packages",
     "  \"tidyverse\", \"brms\", \"tidybayes\", \"emmeans\", \"bayestestR\", \"ggpubr\",",
     "  # Github packages",
-    "  \"chenyu-psy/smartr@v0.2.2\", ",
+    "  \"chenyu-psy/smartr@v0.2.6\", ",
     "  \"venpopov/bmm\"",
     "  )",
     "process_packages(packages, quietly = TRUE)",

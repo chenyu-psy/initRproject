@@ -1,9 +1,9 @@
-# tests/testthat/test-create_template.R
+# tests/testthat/test-create_script.R
 
 library(testthat)
 
 # Create a temporary directory for testing
-test_that("create_template creates files correctly", {
+test_that("create_script creates files correctly", {
   # Set up temporary directory for tests
   temp_dir <- tempdir()
   old_wd <- getwd()
@@ -19,7 +19,7 @@ test_that("create_template creates files correctly", {
 
   # Test 1: Basic functionality with data_analysis template
   test_file <- file.path(test_dir, "test_analysis.qmd")
-  result <- create_template(
+  result <- create_script(
     file_path = test_file,
     title = "Test Analysis",
     author = "Test Author",
@@ -38,7 +38,7 @@ test_that("create_template creates files correctly", {
 
   # Test 2: Simple report template
   test_file2 <- file.path(test_dir, "test_report.qmd")
-  result2 <- create_template(
+  result2 <- create_script(
     file_path = test_file2,
     title = "Test Report",
     author = "Test Author",
@@ -56,7 +56,7 @@ test_that("create_template creates files correctly", {
 
   # Test 3: RMD file type
   test_file3 <- file.path(test_dir, "test_analysis.rmd")
-  result3 <- create_template(
+  result3 <- create_script(
     file_path = test_file3,
     title = "Test RMD",
     author = "Test Author",
@@ -70,7 +70,7 @@ test_that("create_template creates files correctly", {
   # Test 4: Default file path generation
   # Instead of mocking, we'll just test that a message is shown and a file is created
   expect_message(
-    result4 <- create_template(title = "Default Test"),
+    result4 <- create_script(title = "Default Test"),
     regexp = "No file path provided"
   )
 
@@ -85,7 +85,7 @@ test_that("create_template creates files correctly", {
   unlink(default_file)
 })
 
-test_that("create_template handles errors correctly", {
+test_that("create_script handles errors correctly", {
   # Set up temporary directory for tests
   temp_dir <- tempdir()
   test_dir <- file.path(temp_dir, "test_templates_errors")
@@ -93,7 +93,7 @@ test_that("create_template handles errors correctly", {
 
   # Test 1: Invalid template type
   expect_error(
-    create_template(
+    create_script(
       file_path = file.path(test_dir, "invalid_template.qmd"),
       template = "nonexistent_template"
     ),
@@ -102,7 +102,7 @@ test_that("create_template handles errors correctly", {
 
   # Test 2: Invalid file type
   expect_warning(
-    create_template(
+    create_script(
       file_path = file.path(test_dir, "wrong_extension.txt"),
       type = "qmd"
     ),
@@ -113,13 +113,13 @@ test_that("create_template handles errors correctly", {
   existing_file <- file.path(test_dir, "existing_file.qmd")
   writeLines("test", existing_file)
   expect_error(
-    create_template(file_path = existing_file),
+    create_script(file_path = existing_file),
     regexp = "File already exists"
   )
 
   # Test 4: Invalid title parameter
   expect_error(
-    create_template(
+    create_script(
       file_path = file.path(test_dir, "invalid_title.qmd"),
       title = c("Title1", "Title2")
     ),
@@ -128,7 +128,7 @@ test_that("create_template handles errors correctly", {
 
   # Test 5: Invalid author parameter
   expect_error(
-    create_template(
+    create_script(
       file_path = file.path(test_dir, "invalid_author.qmd"),
       author = c("Author1", "Author2")
     ),
@@ -137,7 +137,7 @@ test_that("create_template handles errors correctly", {
 
   # Test 6: Invalid type parameter
   expect_error(
-    create_template(
+    create_script(
       file_path = file.path(test_dir, "invalid_type.qmd"),
       type = "invalid"
     ),
@@ -148,14 +148,14 @@ test_that("create_template handles errors correctly", {
   unlink(test_dir, recursive = TRUE)
 })
 
-test_that("create_template creates directories as needed", {
+test_that("create_script creates directories as needed", {
   # Set up temporary directory for tests
   temp_dir <- tempdir()
   nested_dir <- file.path(temp_dir, "nested", "path", "for", "testing")
   test_file <- file.path(nested_dir, "nested_test.qmd")
 
   # The function should create all necessary directories
-  result <- create_template(
+  result <- create_script(
     file_path = test_file,
     title = "Nested Test"
   )
@@ -168,19 +168,19 @@ test_that("create_template creates directories as needed", {
   unlink(file.path(temp_dir, "nested"), recursive = TRUE)
 })
 
-test_that("create_template handles file extensions correctly", {
+test_that("create_script handles file extensions correctly", {
   # Set up temporary directory for tests
   temp_dir <- tempdir()
 
   # Test 1: No extension provided
   no_ext_path <- file.path(temp_dir, "no_extension")
-  result1 <- create_template(file_path = no_ext_path, type = "qmd")
+  result1 <- create_script(file_path = no_ext_path, type = "qmd")
   expect_true(file.exists(paste0(no_ext_path, ".qmd")))
 
   # Test 2: Wrong extension provided
   wrong_ext_path <- file.path(temp_dir, "wrong_extension.md")
   expect_warning(
-    result2 <- create_template(file_path = wrong_ext_path, type = "qmd"),
+    result2 <- create_script(file_path = wrong_ext_path, type = "qmd"),
     regexp = "File extension"
   )
   expect_true(file.exists(file.path(temp_dir, "wrong_extension.qmd")))
@@ -190,13 +190,13 @@ test_that("create_template handles file extensions correctly", {
   unlink(file.path(temp_dir, "wrong_extension.qmd"))
 })
 
-test_that("create_template returns file path invisibly", {
+test_that("create_script returns file path invisibly", {
   # Set up temporary directory for tests
   temp_dir <- tempdir()
   test_file <- file.path(temp_dir, "return_test.qmd")
 
   # Capture the return value
-  return_value <- create_template(file_path = test_file)
+  return_value <- create_script(file_path = test_file)
 
   # Check if the return value is the file path
   expect_equal(return_value, test_file)

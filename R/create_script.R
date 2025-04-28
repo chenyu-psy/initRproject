@@ -25,20 +25,20 @@
 #' @examples
 #' \dontrun{
 #' # Create a default data analysis template
-#' create_template()
+#' create_script()
 #'
 #' # Create a specific template type
-#' create_template(template = "data_analysis")
+#' create_script(template = "data_analysis")
 #'
 #' # Create a custom template with specific parameters
-#' create_template("~/Documents/my_analysis.qmd",
+#' create_script("~/Documents/my_analysis.qmd",
 #'                 title = "Experiment Results",
 #'                 author = "Jane Doe")
 #' }
 #'
 #' @importFrom stringr str_c str_glue str_replace str_to_lower str_detect
 #' @export
-create_template <- function(file_path = NULL,
+create_script <- function(file_path = NULL,
                             title = "Data Analysis",
                             author = NULL,
                             type = "qmd",
