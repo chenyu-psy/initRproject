@@ -2,20 +2,24 @@
 % Please edit documentation in R/create_symlink.R
 \name{create_symlink}
 \alias{create_symlink}
-\title{Create a Symbolic Link to a Directory}
+\title{Create a Symbolic Link}
 \usage{
-create_symlink(target_path, link_path)
+create_symlink(target_path, link_path, merge = FALSE)
 }
 \arguments{
-\item{target_path}{Character string. The target directory path that the symlink will point to.}
+\item{target_path}{Character string. The target path that the symlink will point to.}
 
 \item{link_path}{Character string. The path where the symbolic link will be created.}
+
+\item{merge}{Logical. If TRUE and both target_path and link_path exist as directories,
+content from link_path will be merged into target_path. If FALSE, an error will be thrown
+when both directories contain files. Default is FALSE.}
 }
 \value{
 Invisibly returns TRUE if the symlink was created successfully, FALSE otherwise.
 }
 \description{
-Creates a symbolic link from a link path to a target directory path.
+Creates a symbolic link from a link path to a target path.
 On Windows, this function will provide instructions for creating symbolic links
 as they require administrator privileges and different commands.
 }
@@ -23,6 +27,10 @@ as they require administrator privileges and different commands.
 On Unix-like systems (macOS, Linux), this function creates a symbolic link using the 'ln -s' command.
 On Windows, symbolic links require administrator privileges and use different commands, so this
 function will provide instructions for manual creation.
+
+If target_path already exists, the function will use it as is. If link_path exists as a regular
+directory, the function will attempt to move its contents to target_path based on the merge
+parameter.
 }
 \examples{
 \dontrun{
