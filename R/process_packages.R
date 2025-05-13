@@ -1,350 +1,361 @@
-#' Extract Package Name from Package Identifier
+#' Parse Package Specifications
 #'
-#' Parses a package identifier and extracts the actual package name.
-#' Works with both CRAN packages and GitHub packages (with or without version).
+#' @description Parses package specifications into a structured data frame with
+#' information about package name, source (CRAN or GitHub), account (for GitHub packages),
+#' and version or ref (for CRAN: version; for GitHub: branch/tag/commit/version).
 #'
-#' @param pkg_id Character string. Package identifier (e.g., "dplyr" for CRAN,
-#'               "username/reponame" or "username/reponame@v0.1.1" for GitHub)
-#' @return Character string. The extracted package name.
-#' @keywords internal
-extract_package_name <- function(pkg_id) {
+#' @param packages Character vector of package specifications. Formats supported:
+#'   - "pkg_name": Standard CRAN package
+#'   - "pkg_name@vX.Y.Z": CRAN package with version
+#'   - "account/pkg_name": GitHub package
+#'   - "account/pkg_name@vX.Y.Z": GitHub package with version/tag/commit
+#'   - "account/pkg_name@branch": GitHub package with branch/tag/commit
+#'
+#' @return A data frame with columns:
+#'   - name: Package name
+#'   - source: "cran" or "github"
+#'   - account: GitHub account (NA for CRAN packages)
+#'   - version: Version, branch, tag, or commit (NA if not specified)
+#'
+#' @examples
+#' parse_packages(c("dplyr", "ggplot2", "brms@v2.22.0", "chenyu-psy/smartr@v0.3.0", "chenyu-psy/smartr@develop"))
+#'
+#' @export
+parse_packages <- function(packages) {
   # Input validation
-  if (!is.character(pkg_id) || length(pkg_id) != 1 || is.na(pkg_id) || pkg_id == "") {
-    stop("Package identifier must be a single non-empty character string")
+  if (!is.character(packages)) {
+    stop("Package specifications must be provided as a character vector")
   }
-
-  # CRAN package (no slash in identifier)
-  if (!grepl("/", pkg_id)) {
-    return(pkg_id)
+  if (length(packages) == 0) {
+    stop("At least one package specification must be provided")
   }
-
-  # GitHub package - extract base name
-  # First remove version part (if present)
-  pkg_base <- strsplit(pkg_id, "@")[[1]][1]
-  # Extract repository name (part after the last slash)
-  return(sub(".*[/]", "", pkg_base))
-}
-
-
-#' Create Package Status Data Frame
-#'
-#' Helper function to initialize the package status tracking data frame.
-#'
-#' @param packages Character vector of package identifiers.
-#' @return Data frame with initialized package status information.
-#' @keywords internal
-create_package_status_df <- function(packages) {
-  data.frame(
-    package_id = packages,
-    package_name = vapply(packages, extract_package_name, character(1)),
-    installed = FALSE,
-    loaded = FALSE,
-    message = character(length(packages)),
+  
+  # Initialize result data frame
+  result <- data.frame(
+    name = character(length(packages)),
+    source = character(length(packages)),
+    account = rep(NA_character_, length(packages)),
+    version = rep(NA_character_, length(packages)),
     stringsAsFactors = FALSE
   )
+  
+  for (i in seq_along(packages)) {
+    pkg_spec <- packages[i]
+    version_part <- NA_character_
+    pkg_part <- pkg_spec
+    
+    # Split by @ if present
+    if (grepl("@", pkg_spec, fixed = TRUE)) {
+      parts <- strsplit(pkg_spec, "@", fixed = TRUE)[[1]]
+      pkg_part <- parts[1]
+      version_part <- parts[2]
+    }
+    
+    # Check if it's a GitHub package (contains '/')
+    if (grepl("/", pkg_part, fixed = TRUE)) {
+      gh_parts <- strsplit(pkg_part, "/", fixed = TRUE)[[1]]
+      result$account[i] <- gh_parts[1]
+      result$name[i] <- gh_parts[2]
+      result$source[i] <- "github"
+    } else {
+      result$name[i] <- pkg_part
+      result$source[i] <- "cran"
+    }
+    result$version[i] <- version_part
+  }
+  
+  return(result)
 }
 
-#' Check Installed Packages
+
+#' Check Installed Packages and Versions/Refs
 #'
-#' Helper function to check which packages are already installed.
+#' @description Checks if the specified packages are installed and, if a version or ref is required,
+#' whether the installed version meets or exceeds the requirement (for version numbers).
+#' For GitHub packages with non-numeric refs (e.g., "develop"), only installation status is checked.
 #'
-#' @param pkg_status Data frame tracking package status.
-#' @return Updated pkg_status data frame.
-#' @keywords internal
-check_installed_packages <- function(pkg_status) {
-  for (i in seq_len(nrow(pkg_status))) {
-    pkg_name <- pkg_status$package_name[i]
-    if (base::requireNamespace(pkg_name, quietly = TRUE)) {
-      pkg_status$installed[i] <- TRUE
-      pkg_status$message[i] <- paste(pkg_name, "already installed")
-    }
+#' @param parsed_df Data frame as returned by `parse_packages()`.
+#'
+#' @return Data frame with columns:
+#'   - name: Package name
+#'   - source: "cran" or "github"
+#'   - account: GitHub account (NA for CRAN)
+#'   - version: Required version/ref (NA if not specified)
+#'   - is_installed: TRUE if installed, FALSE otherwise
+#'   - has_required_version: TRUE if installed version meets/exceeds requirement (for version numbers), NA otherwise
+#'   - installed_version: Installed version (NA if not installed)
+#'
+#' @examples
+#' pkgs <- c("dplyr", "ggplot2", "brms@2.22.0", "chenyu-psy/smartr@0.3.0", "chenyu-psy/smartr@develop")
+#' parsed <- parse_packages(pkgs)
+#' check_installed_packages(parsed)
+#'
+#' @export
+check_installed_packages <- function(parsed_df) {
+  # Helper: Detects if a string is a version (e.g., 1.2.3, v1.2.3)
+  is_version_string <- function(x) {
+    !is.na(x) && grepl("^v?\\d+(\\.\\d+)*$", x)
   }
-  return(pkg_status)
-}
-
-#' Install Missing Packages
-#'
-#' Helper function to install packages that are not yet installed.
-#'
-#' @param pkg_status Data frame tracking package status.
-#' @param auto_install Logical. Whether to install without prompting.
-#' @param github_auth Character. GitHub authentication token.
-#' @return Updated pkg_status data frame.
-#' @keywords internal
-install_missing_packages <- function(pkg_status, auto_install, github_auth) {
-  # Identify uninstalled packages
-  uninstalled_idx <- which(!pkg_status$installed)
-
-  if (length(uninstalled_idx) > 0) {
-    # Separate into CRAN and GitHub packages
-    uninstalled_pkgs <- pkg_status$package_id[uninstalled_idx]
-    is_github <- grepl("/", uninstalled_pkgs)
-
-    cran_pkgs <- uninstalled_pkgs[!is_github]
-    github_pkgs <- uninstalled_pkgs[is_github]
-
-    # Process CRAN packages
-    if (length(cran_pkgs) > 0) {
-      pkg_status <- install_cran_packages(pkg_status, cran_pkgs, auto_install)
-    }
-
-    # Process GitHub packages
-    if (length(github_pkgs) > 0) {
-      pkg_status <- install_github_packages(pkg_status, github_pkgs, auto_install, github_auth)
-    }
+  
+  # Input validation
+  required_cols <- c("name", "source", "account", "version")
+  if (!is.data.frame(parsed_df) || !all(required_cols %in% names(parsed_df))) {
+    stop("Input must be a data frame as returned by parse_packages()")
   }
-
-  return(pkg_status)
-}
-
-#' Install CRAN Packages
-#'
-#' Helper function to install packages from CRAN.
-#'
-#' @param pkg_status Data frame tracking package status.
-#' @param cran_pkgs Character vector of CRAN package identifiers.
-#' @param auto_install Logical. Whether to install without prompting.
-#' @return Updated pkg_status data frame.
-#' @keywords internal
-install_cran_packages <- function(pkg_status, cran_pkgs, auto_install) {
-  if (length(cran_pkgs) == 0) return(pkg_status)
-
-  # Determine whether to install
-  should_install <- auto_install
-
-  if (!auto_install) {
-    cat("The following CRAN packages need to be installed:\n")
-    cat(paste(" -", cran_pkgs), sep = "\n")
-    response <- readline(prompt = "Do you want to install these CRAN packages? (y/n): ")
-    should_install <- tolower(substring(response, 1, 1)) == "y"
-  }
-
-  if (should_install) {
-    for (pkg_id in cran_pkgs) {
-      i <- which(pkg_status$package_id == pkg_id)
-      pkg_name <- pkg_status$package_name[i]
-
-      tryCatch({
-        utils::install.packages(pkg_id)
-        if (base::requireNamespace(pkg_name, quietly = TRUE)) {
-          pkg_status$installed[i] <- TRUE
-          pkg_status$message[i] <- paste(pkg_name, "installed from CRAN")
-        } else {
-          pkg_status$message[i] <- paste("Failed to install", pkg_name, "from CRAN")
-        }
-      }, error = function(e) {
-        pkg_status$message[i] <- paste("Error installing", pkg_name, ":", e$message)
-      })
-    }
-  } else {
-    for (pkg_id in cran_pkgs) {
-      i <- which(pkg_status$package_id == pkg_id)
-      pkg_status$message[i] <- "Installation skipped by user"
-    }
-  }
-
-  return(pkg_status)
-}
-
-#' Install GitHub Packages
-#'
-#' Helper function to install packages from GitHub.
-#'
-#' @param pkg_status Data frame tracking package status.
-#' @param github_pkgs Character vector of GitHub package identifiers.
-#' @param auto_install Logical. Whether to install without prompting.
-#' @param github_auth Character. GitHub authentication token.
-#' @return Updated pkg_status data frame.
-#' @keywords internal
-install_github_packages <- function(pkg_status, github_pkgs, auto_install, github_auth) {
-  if (length(github_pkgs) == 0) return(pkg_status)
-
-  # Determine whether to install
-  should_install <- auto_install
-
-  if (!auto_install) {
-    cat("The following GitHub packages need to be installed:\n")
-    cat(paste(" -", github_pkgs), sep = "\n")
-    response <- readline(prompt = "Do you want to install these GitHub packages? (y/n): ")
-    should_install <- tolower(substring(response, 1, 1)) == "y"
-  }
-
-  if (should_install) {
-    # Check for remotes package
-    has_remotes <- ensure_remotes_package(pkg_status, github_pkgs, auto_install)
-
-    if (has_remotes) {
-      # Install GitHub packages
-      for (pkg_id in github_pkgs) {
-        i <- which(pkg_status$package_id == pkg_id)
-        pkg_name <- pkg_status$package_name[i]
-
-        tryCatch({
-          # Use authentication if provided
-          if (!is.null(github_auth)) {
-            remotes::install_github(pkg_id, auth_token = github_auth)
-          } else {
-            remotes::install_github(pkg_id)
-          }
-
-          if (base::requireNamespace(pkg_name, quietly = TRUE)) {
-            pkg_status$installed[i] <- TRUE
-            pkg_status$message[i] <- paste(pkg_name, "installed from GitHub")
-          } else {
-            pkg_status$message[i] <- paste("Failed to install", pkg_name, "from GitHub")
-          }
-        }, error = function(e) {
-          pkg_status$message[i] <- paste("Error installing", pkg_name, ":", e$message)
-        })
-      }
-    }
-  } else {
-    for (pkg_id in github_pkgs) {
-      i <- which(pkg_status$package_id == pkg_id)
-      pkg_status$message[i] <- "Installation skipped by user"
-    }
-  }
-
-  return(pkg_status)
-}
-
-#' Ensure Remotes Package
-#'
-#' Helper function to ensure the remotes package is installed.
-#'
-#' @param pkg_status Data frame tracking package status.
-#' @param github_pkgs Character vector of GitHub package identifiers.
-#' @param auto_install Logical. Whether to install without prompting.
-#' @return Logical indicating whether remotes is available.
-#' @keywords internal
-ensure_remotes_package <- function(pkg_status, github_pkgs, auto_install) {
-  if (base::requireNamespace("remotes", quietly = TRUE)) {
-    return(TRUE)
-  }
-
-  # remotes package is not installed
-  cat("The 'remotes' package is required to install GitHub packages.\n")
-
-  should_install_remotes <- auto_install
-
-  if (!auto_install) {
-    remotes_response <- readline(prompt = "Do you want to install the 'remotes' package? (y/n): ")
-    should_install_remotes <- tolower(substring(remotes_response, 1, 1)) == "y"
-  }
-
-  if (should_install_remotes) {
-    tryCatch({
-      utils::install.packages("remotes")
-      if (base::requireNamespace("remotes", quietly = TRUE)) {
-        return(TRUE)
+  
+  # Get installed packages and their versions
+  installed <- as.data.frame(installed.packages(), stringsAsFactors = FALSE)
+  
+  # Prepare output columns
+  is_installed <- logical(nrow(parsed_df))
+  has_required_version <- rep(NA, nrow(parsed_df))
+  installed_version <- rep(NA_character_, nrow(parsed_df))
+  
+  for (i in seq_len(nrow(parsed_df))) {
+    pkg_name <- parsed_df$name[i]
+    req_version <- parsed_df$version[i]
+    pkg_source <- parsed_df$source[i]
+    
+    idx <- which(installed$Package == pkg_name)
+    if (length(idx) == 1) {
+      is_installed[i] <- TRUE
+      installed_version[i] <- installed$Version[idx]
+      # Only check version if a version string is specified
+      if (!is.na(req_version) && is_version_string(req_version)) {
+        # Remove 'v' prefix for comparison
+        req_version_clean <- sub("^v", "", req_version)
+        has_required_version[i] <- utils::compareVersion(installed_version[i], req_version_clean) >= 0
       } else {
-        warning("Failed to install 'remotes' package. GitHub packages will be skipped.")
-        for (pkg_id in github_pkgs) {
-          i <- which(pkg_status$package_id == pkg_id)
-          pkg_status$message[i] <- "Skipped: 'remotes' package installation failed"
-        }
-        return(FALSE)
+        # For GitHub refs or if no version specified, cannot check
+        has_required_version[i] <- NA
       }
-    }, error = function(e) {
-      warning(paste("Error installing 'remotes' package:", e$message))
-      for (pkg_id in github_pkgs) {
-        i <- which(pkg_status$package_id == pkg_id)
-        pkg_status$message[i] <- "Skipped: 'remotes' package installation failed"
-      }
-      return(FALSE)
-    })
-  } else {
-    for (pkg_id in github_pkgs) {
-      i <- which(pkg_status$package_id == pkg_id)
-      pkg_status$message[i] <- "Skipped: 'remotes' package not installed"
-    }
-    return(FALSE)
-  }
-}
-
-#' Load Packages
-#'
-#' Helper function to load installed packages.
-#'
-#' @param pkg_status Data frame tracking package status.
-#' @return Updated pkg_status data frame.
-#' @keywords internal
-load_packages <- function(pkg_status) {
-  for (i in seq_len(nrow(pkg_status))) {
-    pkg_name <- pkg_status$package_name[i]
-
-    if (pkg_status$installed[i]) {
-      tryCatch({
-        library(pkg_name, character.only = TRUE)
-        pkg_status$loaded[i] <- TRUE
-
-        # Only update message if it doesn't already contain an installation message
-        if (!grepl("installed", pkg_status$message[i])) {
-          pkg_status$message[i] <- paste(pkg_name, "loaded successfully")
-        } else {
-          pkg_status$message[i] <- paste(pkg_status$message[i], "and loaded successfully")
-        }
-      }, error = function(e) {
-        pkg_status$message[i] <- paste("Error loading", pkg_name, ":", e$message)
-      })
+    } else {
+      is_installed[i] <- FALSE
+      installed_version[i] <- NA
+      has_required_version[i] <- NA
     }
   }
-
-  return(pkg_status)
+  
+  # Combine results
+  result <- cbind(
+    parsed_df,
+    is_installed = is_installed,
+    has_required_version = has_required_version,
+    installed_version = installed_version
+  )
+  rownames(result) <- NULL
+  return(result)
 }
 
-#' Process Multiple Packages
+
+#' Install a GitHub Package with Automatic v-Prefix Retry
 #'
-#' Processes a vector of package identifiers - installing and loading each package.
-#' Tracks the status of each operation and returns detailed results.
+#' @description
+#' Attempts to install a GitHub package using \code{remotes::install_github()}. If the specified
+#' \code{ref} (tag/branch/commit) looks like a version number (e.g., "0.3.0") and installation fails,
+#' the function automatically retries with a "v" prefix (e.g., "v0.3.0"), which is a common GitHub tag convention.
 #'
-#' @param packages Character vector. Package identifiers to process.
-#' @param quietly Logical. Whether to suppress the return of the status data frame.
-#'                If TRUE, the function returns invisibly. Default is FALSE.
-#' @param auto_install Logical. If TRUE, installs packages without prompting.
-#'                     Default is FALSE.
-#' @param github_auth Character. GitHub authentication token for private repositories.
-#'                   Default is NULL (no authentication).
-#' @return Data frame with columns for package information and status.
+#' @param repo Character string in the format "account/repo".
+#' @param ref Character string specifying the tag, branch, or commit to install. If \code{NULL}, the default branch is used.
+#' @param quietly Logical; if \code{TRUE}, suppresses installation messages.
+#' @param ... Additional arguments passed to \code{remotes::install_github()}.
+#'
+#' @return Logical. \code{TRUE} if installation succeeded, \code{FALSE} otherwise.
+#'
+#' @details
+#' This function is useful when users specify a version tag without the "v" prefix, but the GitHub repository uses "v" (e.g., "v1.2.3").
+#' It first tries the user-supplied \code{ref}, and if that fails and the ref is a version-like string without "v", it retries with "v" prepended.
+#'
 #' @examples
 #' \dontrun{
-#' # Process multiple packages with interactive prompts
-#' result <- process_packages(c("dplyr", "tidyverse/ggplot2"))
-#'
-#' # Process packages automatically without prompts
-#' result <- process_packages(c("dplyr", "stringr"), auto_install = TRUE)
+#' # Try to install tag "0.3.0" or "v0.3.0" from GitHub
+#' install_github_with_v_retry("chenyu-psy/smartr", ref = "0.3.0")
 #' }
 #' @export
-process_packages <- function(packages, quietly = FALSE, auto_install = FALSE,
-                             github_auth = NULL) {
-  # Input validation
-  if (!is.character(packages) || length(packages) == 0) {
-    stop("'packages' must be a non-empty character vector")
+install_github_with_v_retry <- function(repo, ref = NULL, quietly = FALSE, ...) {
+  tryCatch({
+    remotes::install_github(repo, ref = ref, quiet = quietly, ...)
+    TRUE
+  }, error = function(e) {
+    if (!is.null(ref) && grepl("^\\d+(\\.\\d+)*$", ref)) {
+      ref_v <- paste0("v", ref)
+      if (!quietly) message(sprintf("Installation with ref='%s' failed. Retrying with ref='%s'...", ref, ref_v))
+      tryCatch({
+        remotes::install_github(repo, ref = ref_v, quiet = quietly, ...)
+        TRUE
+      }, error = function(e2) {
+        if (!quietly) message(sprintf("Both attempts failed: %s", e2$message))
+        FALSE
+      })
+    } else {
+      if (!quietly) message(sprintf("Installation failed: %s", e$message))
+      FALSE
+    }
+  })
+}
+
+
+
+#' Interactively or Automatically Install/Update Packages
+#'
+#' @param check_df Data frame as returned by check_installed_packages().
+#' @param cran_repos CRAN repository URL.
+#' @param quietly Logical, if TRUE, skip all prompts and install/update automatically.
+#' @return Data frame of actions taken.
+#' @export
+interactive_package_manager <- function(check_df, cran_repos = "https://cran.rstudio.com/", quietly = FALSE) {
+  required_cols <- c("name", "source", "account", "version", "is_installed", "has_required_version", "installed_version")
+  if (!is.data.frame(check_df) || !all(required_cols %in% names(check_df))) {
+    stop("Input must be a data frame as returned by check_installed_packages()")
   }
-
-  if (!is.logical(quietly) || length(quietly) != 1 || is.na(quietly)) {
-    stop("'quietly' must be a single logical value (TRUE or FALSE)")
+  ask_user <- function(prompt) {
+    repeat {
+      cat(prompt, "[y/n]: ")
+      ans <- tolower(trimws(readline()))
+      if (ans %in% c("y", "n")) return(ans == "y")
+      cat("Please enter 'y' or 'n'.\n")
+    }
   }
-
-  if (!is.logical(auto_install) || length(auto_install) != 1 || is.na(auto_install)) {
-    stop("'auto_install' must be a single logical value (TRUE or FALSE)")
+  if (!requireNamespace("remotes", quietly = TRUE)) {
+    if (!quietly) cat("The 'remotes' package is required for GitHub installations. Installing now...\n")
+    install.packages("remotes", repos = cran_repos, quiet = quietly, ask = FALSE)
   }
-
-  # Create a data frame to track package information
-  pkg_status <- create_package_status_df(packages)
-
-  # Check which packages are already installed
-  pkg_status <- check_installed_packages(pkg_status)
-
-  # Install missing packages if needed
-  pkg_status <- install_missing_packages(pkg_status, auto_install, github_auth)
-
-  # Load packages
-  pkg_status <- load_packages(pkg_status)
-
-  # Return results based on quietly parameter
-  if (!quietly) {
-    return(pkg_status)
+  actions <- data.frame(
+    name = check_df$name,
+    source = check_df$source,
+    account = check_df$account,
+    version = check_df$version,
+    action = rep(NA_character_, nrow(check_df)),
+    stringsAsFactors = FALSE
+  )
+  for (i in seq_len(nrow(check_df))) {
+    pkg <- check_df[i, ]
+    pkg_label <- if (pkg$source == "cran") {
+      if (!is.na(pkg$version)) paste0(pkg$name, "@", pkg$version) else pkg$name
+    } else {
+      if (!is.na(pkg$version)) paste0(pkg$account, "/", pkg$name, "@", pkg$version) else paste0(pkg$account, "/", pkg$name)
+    }
+    # 1. Missing CRAN package
+    if (!pkg$is_installed && pkg$source == "cran") {
+      if (quietly) {
+        install.packages(pkg$name, repos = cran_repos, quiet = quietly, ask = FALSE)
+        actions$action[i] <- "installed"
+      } else if (ask_user(sprintf("CRAN package '%s' is missing. Install?", pkg_label))) {
+        install.packages(pkg$name, repos = cran_repos, quiet = quietly, ask = FALSE)
+        actions$action[i] <- "installed"
+      } else {
+        actions$action[i] <- "skipped"
+      }
+    }
+    # 2. Missing GitHub package
+    else if (!pkg$is_installed && pkg$source == "github") {
+      repo <- paste0(pkg$account, "/", pkg$name)
+      ref <- pkg$version
+      if (quietly) {
+        ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
+        actions$action[i] <- if (ok) "installed" else "failed"
+      } else if (ask_user(sprintf("GitHub package '%s' is missing. Install?", pkg_label))) {
+        ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
+        actions$action[i] <- if (ok) "installed" else "failed"
+      } else {
+        actions$action[i] <- "skipped"
+      }
+    }
+    # 3. Outdated CRAN package
+    else if (pkg$source == "cran" && !is.na(pkg$version) && !is.na(pkg$has_required_version) && !pkg$has_required_version) {
+      if (quietly) {
+        install.packages(pkg$name, repos = cran_repos, quiet = quietly, ask = FALSE)
+        actions$action[i] <- "updated"
+      } else if (ask_user(sprintf("CRAN package '%s' is installed (version %s), but version %s is required. Update?", 
+                                  pkg$name, pkg$installed_version, pkg$version))) {
+        install.packages(pkg$name, repos = cran_repos, quiet = quietly, ask = FALSE)
+        actions$action[i] <- "updated"
+      } else {
+        actions$action[i] <- "skipped"
+      }
+    }
+    # 4. Outdated GitHub package with version
+    else if (pkg$source == "github" && !is.na(pkg$version) && grepl("^v?\\d+(\\.\\d+)*$", pkg$version) &&
+             !is.na(pkg$has_required_version) && !pkg$has_required_version) {
+      repo <- paste0(pkg$account, "/", pkg$name)
+      ref <- pkg$version
+      if (quietly) {
+        ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
+        actions$action[i] <- if (ok) "updated" else "failed"
+      } else if (ask_user(sprintf("GitHub package '%s' is installed (version %s), but version %s is required. Update?", 
+                                  repo, pkg$installed_version, pkg$version))) {
+        ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
+        actions$action[i] <- if (ok) "updated" else "failed"
+      } else {
+        actions$action[i] <- "skipped"
+      }
+    }
+    # 5. GitHub package with non-version ref (e.g., develop, main)
+    else if (pkg$source == "github" && !is.na(pkg$version) && !grepl("^v?\\d+(\\.\\d+)*$", pkg$version)) {
+      repo <- paste0(pkg$account, "/", pkg$name)
+      ref <- pkg$version
+      if (quietly) {
+        ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
+        actions$action[i] <- if (ok) "updated" else "failed"
+      } else if (ask_user(sprintf("GitHub package '%s' is installed, but ref '%s' is specified. Update to this ref?", 
+                                  repo, ref))) {
+        ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
+        actions$action[i] <- if (ok) "updated" else "failed"
+      } else {
+        actions$action[i] <- "skipped"
+      }
+    } else {
+      actions$action[i] <- "none"
+    }
   }
-  invisible(pkg_status)
+  if (!quietly) cat("All done!\n")
+  invisible(actions)
+}
+
+
+
+
+#' Load All Packages from Parsed Data Frame
+#'
+#' @param parsed_df Data frame as returned by parse_packages().
+#' @param quietly Logical, suppress messages if TRUE.
+#' @return Invisibly returns a vector of loaded package names.
+#' @export
+load_parsed_packages <- function(parsed_df, quietly = FALSE) {
+  loaded <- character(0)
+  for (i in seq_len(nrow(parsed_df))) {
+    pkg_name <- parsed_df$name[i]
+    tryCatch({
+      suppressMessages(library(pkg_name, character.only = TRUE, quietly = quietly, warn.conflicts = FALSE))
+      loaded <- c(loaded, pkg_name)
+    }, error = function(e) {
+      if (!quietly) message(sprintf("Failed to load package '%s': %s", pkg_name, e$message))
+    })
+  }
+  invisible(loaded)
+}
+
+
+#' Process, Install/Update, and Load R Packages Interactively or Quietly
+#'
+#' @param packages Character vector of package specifications.
+#' @param cran_repos CRAN repository URL (default: "https://cran.rstudio.com/").
+#' @param quietly Logical, if TRUE, skip all prompts and install/update/load automatically.
+#'
+#' @return Invisibly returns a list with actions and loaded packages.
+#' @export
+process_packages <- function(packages, cran_repos = "https://cran.rstudio.com/", quietly = FALSE) {
+  # Step 1: Parse package specifications
+  parsed <- parse_packages(packages)
+  
+  # Step 2: Check installed packages and versions
+  checked <- check_installed_packages(parsed)
+  
+  # Step 3: Interactively or quietly install/update as needed
+  actions <- interactive_package_manager(checked, cran_repos = cran_repos, quietly = quietly)
+  
+  # Step 4: Load all packages quietly or interactively
+  loaded <- load_parsed_packages(parsed, quietly = quietly)
+  
+  invisible(list(actions = actions, loaded = loaded))
 }
