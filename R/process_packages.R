@@ -29,7 +29,7 @@ parse_packages <- function(packages) {
   if (length(packages) == 0) {
     stop("At least one package specification must be provided")
   }
-  
+
   # Initialize result data frame
   result <- data.frame(
     name = character(length(packages)),
@@ -38,19 +38,19 @@ parse_packages <- function(packages) {
     version = rep(NA_character_, length(packages)),
     stringsAsFactors = FALSE
   )
-  
+
   for (i in seq_along(packages)) {
     pkg_spec <- packages[i]
     version_part <- NA_character_
     pkg_part <- pkg_spec
-    
+
     # Split by @ if present
     if (grepl("@", pkg_spec, fixed = TRUE)) {
       parts <- strsplit(pkg_spec, "@", fixed = TRUE)[[1]]
       pkg_part <- parts[1]
       version_part <- parts[2]
     }
-    
+
     # Check if it's a GitHub package (contains '/')
     if (grepl("/", pkg_part, fixed = TRUE)) {
       gh_parts <- strsplit(pkg_part, "/", fixed = TRUE)[[1]]
@@ -63,7 +63,7 @@ parse_packages <- function(packages) {
     }
     result$version[i] <- version_part
   }
-  
+
   return(result)
 }
 
@@ -85,6 +85,8 @@ parse_packages <- function(packages) {
 #'   - has_required_version: TRUE if installed version meets/exceeds requirement (for version numbers), NA otherwise
 #'   - installed_version: Installed version (NA if not installed)
 #'
+#' @importFrom dplyr rename mutate left_join case_when
+#'
 #' @examples
 #' pkgs <- c("dplyr", "ggplot2", "brms@2.22.0", "chenyu-psy/smartr@0.3.0", "chenyu-psy/smartr@develop")
 #' parsed <- parse_packages(pkgs)
@@ -92,59 +94,32 @@ parse_packages <- function(packages) {
 #'
 #' @export
 check_installed_packages <- function(parsed_df) {
-  # Helper: Detects if a string is a version (e.g., 1.2.3, v1.2.3)
-  is_version_string <- function(x) {
-    !is.na(x) && grepl("^v?\\d+(\\.\\d+)*$", x)
-  }
-  
+
   # Input validation
   required_cols <- c("name", "source", "account", "version")
   if (!is.data.frame(parsed_df) || !all(required_cols %in% names(parsed_df))) {
     stop("Input must be a data frame as returned by parse_packages()")
   }
-  
+
   # Get installed packages and their versions
   installed <- as.data.frame(installed.packages(), stringsAsFactors = FALSE)
-  
-  # Prepare output columns
-  is_installed <- logical(nrow(parsed_df))
-  has_required_version <- rep(NA, nrow(parsed_df))
-  installed_version <- rep(NA_character_, nrow(parsed_df))
-  
-  for (i in seq_len(nrow(parsed_df))) {
-    pkg_name <- parsed_df$name[i]
-    req_version <- parsed_df$version[i]
-    pkg_source <- parsed_df$source[i]
-    
-    idx <- which(installed$Package == pkg_name)
-    if (length(idx) == 1) {
-      is_installed[i] <- TRUE
-      installed_version[i] <- installed$Version[idx]
-      # Only check version if a version string is specified
-      if (!is.na(req_version) && is_version_string(req_version)) {
-        # Remove 'v' prefix for comparison
-        req_version_clean <- sub("^v", "", req_version)
-        has_required_version[i] <- utils::compareVersion(installed_version[i], req_version_clean) >= 0
-      } else {
-        # For GitHub refs or if no version specified, cannot check
-        has_required_version[i] <- NA
-      }
-    } else {
-      is_installed[i] <- FALSE
-      installed_version[i] <- NA
-      has_required_version[i] <- NA
-    }
-  }
-  
-  # Combine results
-  result <- cbind(
-    parsed_df,
-    is_installed = is_installed,
-    has_required_version = has_required_version,
-    installed_version = installed_version
-  )
-  rownames(result) <- NULL
-  return(result)
+
+  # Check if each package is installed and its version
+  results <- parsed_df %>%
+    left_join(installed[, c("Package", "Version")], by = c("name" = "Package")) %>%
+    rename(installed_version = Version) %>%
+    mutate(
+      is_installed = !is.na(installed_version),
+      has_required_version = case_when(
+        !is_installed ~ FALSE,
+        is.na(version) ~ TRUE,  # No version specified, so no check
+        installed_version >= gsub("[A-Za-z]", "", version) ~ TRUE,
+        TRUE ~ FALSE
+      )
+    )
+
+
+  return(results)
 }
 
 
@@ -266,7 +241,7 @@ interactive_package_manager <- function(check_df, cran_repos = "https://cran.rst
       if (quietly) {
         install.packages(pkg$name, repos = cran_repos, quiet = quietly, ask = FALSE)
         actions$action[i] <- "updated"
-      } else if (ask_user(sprintf("CRAN package '%s' is installed (version %s), but version %s is required. Update?", 
+      } else if (ask_user(sprintf("CRAN package '%s' is installed (version %s), but version %s is required. Update?",
                                   pkg$name, pkg$installed_version, pkg$version))) {
         install.packages(pkg$name, repos = cran_repos, quiet = quietly, ask = FALSE)
         actions$action[i] <- "updated"
@@ -282,7 +257,7 @@ interactive_package_manager <- function(check_df, cran_repos = "https://cran.rst
       if (quietly) {
         ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
         actions$action[i] <- if (ok) "updated" else "failed"
-      } else if (ask_user(sprintf("GitHub package '%s' is installed (version %s), but version %s is required. Update?", 
+      } else if (ask_user(sprintf("GitHub package '%s' is installed (version %s), but version %s is required. Update?",
                                   repo, pkg$installed_version, pkg$version))) {
         ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
         actions$action[i] <- if (ok) "updated" else "failed"
@@ -297,7 +272,7 @@ interactive_package_manager <- function(check_df, cran_repos = "https://cran.rst
       if (quietly) {
         ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
         actions$action[i] <- if (ok) "updated" else "failed"
-      } else if (ask_user(sprintf("GitHub package '%s' is installed, but ref '%s' is specified. Update to this ref?", 
+      } else if (ask_user(sprintf("GitHub package '%s' is installed, but ref '%s' is specified. Update to this ref?",
                                   repo, ref))) {
         ok <- install_github_with_v_retry(repo, ref, quietly = quietly)
         actions$action[i] <- if (ok) "updated" else "failed"
@@ -308,7 +283,7 @@ interactive_package_manager <- function(check_df, cran_repos = "https://cran.rst
       actions$action[i] <- "none"
     }
   }
-  if (!quietly) cat("All done!\n")
+  if (!quietly) cat("All packages have been installed with the required version or higher.\n")
   invisible(actions)
 }
 
@@ -347,15 +322,15 @@ load_parsed_packages <- function(parsed_df, quietly = FALSE) {
 process_packages <- function(packages, cran_repos = "https://cran.rstudio.com/", quietly = FALSE) {
   # Step 1: Parse package specifications
   parsed <- parse_packages(packages)
-  
+
   # Step 2: Check installed packages and versions
   checked <- check_installed_packages(parsed)
-  
+
   # Step 3: Interactively or quietly install/update as needed
   actions <- interactive_package_manager(checked, cran_repos = cran_repos, quietly = quietly)
-  
+
   # Step 4: Load all packages quietly or interactively
   loaded <- load_parsed_packages(parsed, quietly = quietly)
-  
+
   invisible(list(actions = actions, loaded = loaded))
 }

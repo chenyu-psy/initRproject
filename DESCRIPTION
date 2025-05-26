@@ -1,7 +1,7 @@
 Package: initRproject
 Type: Package
 Title: Automatically loaded functions when an R project is launched
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("Chenyu", "Li", email = "chenyu.li.hz@gmail.com", role = c("aut", "cre"))
   )
@@ -11,9 +11,9 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.2
 Imports: 
-    stringr (>= 1.5.1)
-Remotes: 
-    tidyverse/stringr
+    stringr,
+    dplyr,
+    rlang
 Suggests: 
     testthat (>= 3.0.0),
     remotes
