@@ -2,40 +2,24 @@
 % Please edit documentation in R/process_packages.R
 \name{process_packages}
 \alias{process_packages}
-\title{Process Multiple Packages}
+\title{Process, Install/Update, and Load R Packages Interactively or Quietly}
 \usage{
 process_packages(
   packages,
-  quietly = FALSE,
-  auto_install = FALSE,
-  github_auth = NULL
+  cran_repos = "https://cran.rstudio.com/",
+  quietly = FALSE
 )
 }
 \arguments{
-\item{packages}{Character vector. Package identifiers to process.}
+\item{packages}{Character vector of package specifications.}
 
-\item{quietly}{Logical. Whether to suppress the return of the status data frame.
-If TRUE, the function returns invisibly. Default is FALSE.}
+\item{cran_repos}{CRAN repository URL (default: "https://cran.rstudio.com/").}
 
-\item{auto_install}{Logical. If TRUE, installs packages without prompting.
-Default is FALSE.}
-
-\item{github_auth}{Character. GitHub authentication token for private repositories.
-Default is NULL (no authentication).}
+\item{quietly}{Logical, if TRUE, skip all prompts and install/update/load automatically.}
 }
 \value{
-Data frame with columns for package information and status.
+Invisibly returns a list with actions and loaded packages.
 }
 \description{
-Processes a vector of package identifiers - installing and loading each package.
-Tracks the status of each operation and returns detailed results.
-}
-\examples{
-\dontrun{
-# Process multiple packages with interactive prompts
-result <- process_packages(c("dplyr", "tidyverse/ggplot2"))
-
-# Process packages automatically without prompts
-result <- process_packages(c("dplyr", "stringr"), auto_install = TRUE)
-}
+Process, Install/Update, and Load R Packages Interactively or Quietly
 }

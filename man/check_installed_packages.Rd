@@ -2,17 +2,31 @@
 % Please edit documentation in R/process_packages.R
 \name{check_installed_packages}
 \alias{check_installed_packages}
-\title{Check Installed Packages}
+\title{Check Installed Packages and Versions/Refs}
 \usage{
-check_installed_packages(pkg_status)
+check_installed_packages(parsed_df)
 }
 \arguments{
-\item{pkg_status}{Data frame tracking package status.}
+\item{parsed_df}{Data frame as returned by `parse_packages()`.}
 }
 \value{
-Updated pkg_status data frame.
+Data frame with columns:
+  - name: Package name
+  - source: "cran" or "github"
+  - account: GitHub account (NA for CRAN)
+  - version: Required version/ref (NA if not specified)
+  - is_installed: TRUE if installed, FALSE otherwise
+  - has_required_version: TRUE if installed version meets/exceeds requirement (for version numbers), NA otherwise
+  - installed_version: Installed version (NA if not installed)
 }
 \description{
-Helper function to check which packages are already installed.
+Checks if the specified packages are installed and, if a version or ref is required,
+whether the installed version meets or exceeds the requirement (for version numbers).
+For GitHub packages with non-numeric refs (e.g., "develop"), only installation status is checked.
 }
-\keyword{internal}
+\examples{
+pkgs <- c("dplyr", "ggplot2", "brms@2.22.0", "chenyu-psy/smartr@0.3.0", "chenyu-psy/smartr@develop")
+parsed <- parse_packages(pkgs)
+check_installed_packages(parsed)
+
+}
